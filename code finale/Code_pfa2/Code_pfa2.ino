@@ -1,0 +1,123 @@
+#include "PZEM004T.h"
+
+#include <HardwareSerial.h>
+#include <SoftwareSerial.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
+
+
+#define TOKEN  "BBFF-1S2Iad4ewWXTLXNANfOMDcHHVb9kPP"  // Put here your Ubidots TOKEN
+#define WIFISSID "TOPNET_2C78"
+#define PASSWORD "jjp8mjg8pc"
+#define MQTT_CLIENT_NAME "supervision"
+#define VARIABLE_LABEL "Tension"
+#define VARIABLE_LABEL_SUBSCRIBE "relay"
+
+#define DEVICE_LABEL "Esp32"
+
+
+WiFiClient ubidots;
+PubSubClient client(ubidots);
+
+char mqttBroker[] = "things.ubidots.com";
+char payload[700];
+char topic[150];
+char topicSubscribe[100];
+
+// Space to store values to send
+char str_box_temp[6];
+char str_lat[6];
+char str_lng[6];
+
+#include <PZEM004T.h> 
+HardwareSerial PzemSerial2(2);     // Use hwserial UART2 at pins IO-16 (RX2) and IO-17 (TX2)
+PZEM004T pzem(&PzemSerial2);
+IPAddress ip(192, 168, 1, 1);
+
+
+void ICACHE_RAM_ATTR ISRoutine();
+
+void reconnect() {
+  while(true){
+    Serial.println("connecting to pzem");
+    if(pzem.setAddress(ip))
+    break ;
+    delay(1000);
+    
+    }
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.println("Attempting MQTT connection...");
+    
+    // Attemp to connect
+    if (client.connect(MQTT_CLIENT_NAME, TOKEN, "")) {
+      Serial.println("Connected");
+      client.subscribe(topicSubscribe);
+    } else {
+      Serial.print("Failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 2 seconds");
+      // Wait 2 seconds before retrying
+      delay(2000);
+    }
+  }
+}
+
+
+
+
+
+
+
+void setup(){
+ 
+    Serial.begin(115200);
+   
+  WiFi.begin(WIFISSID, PASSWORD);
+   Serial.println();
+  Serial.print("Wait for WiFi...");
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+   Serial.println("");
+  Serial.println("WiFi Connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  client.setServer(mqttBroker, 1883);
+
+
+  sprintf(topicSubscribe, "/v1.6/devices/%s/%s/lv", DEVICE_LABEL, VARIABLE_LABEL_SUBSCRIBE);
+  
+  client.subscribe(topicSubscribe);
+
+}
+void loop(){
+   if (!client.connected()) {
+    client.subscribe(topicSubscribe);   
+    reconnect();
+  }
+
+   float courant = pzem.current(ip);
+    
+   sprintf(topic, "%s%s", "/v1.6/devices/", DEVICE_LABEL);
+  sprintf(payload, "%s", ""); // Cleans the payload
+  sprintf(payload, "{\"%s\":", VARIABLE_LABEL); // Adds the variable label
+  
+ 
+  Serial.print("courant = ");Serial.println(courant);
+  
+  Serial.println("Publishing data to Ubidots Cloud");
+  client.publish(topic, payload);
+  client.loop();
+  delay(1000);
+  
+
+   
+      
+         
+            
+            
+   
+}
